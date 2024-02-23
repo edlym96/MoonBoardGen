@@ -5,18 +5,14 @@ from sklearn.utils import resample
 import os
 import numpy as np
 import json
+import pickle
 import random
 import math
 from plotting import plot_board_2016
 
 """
 TODO:
-- Save input to pickle files
 - Investigate if I need to change upsampling to use repeat instead
-- Create model (use pytorch here?)
-- Add weights to input data
-- Train (might need to use aws resources here...)
-- 
 """
 
 with open("./data/problems MoonBoard 2016 .json") as f:
@@ -113,16 +109,16 @@ def convert(grade_dict):
     Convert dictionary of grade: problem_list into numpy array with board matrices and is_benchmark scalar
     """
     n_total = sum([len(problems) for problems in grade_dict.values()])
-    train = np.zeros((n_total*len(grade_dict), 3, MOONBOARD_ROWS, MOONBOARD_COLS), dtype=np.int8)
-    is_bench = np.zeros(n_total*len(grade_dict), dtype=np.int8)
+    out = np.zeros((n_total, 3, MOONBOARD_ROWS, MOONBOARD_COLS), dtype=np.int8)
+    is_bench = np.zeros(n_total, dtype=np.int8)
     idx = 0
     for problem_list in grade_dict.values():
         matrix, is_benchmark = convert_to_matrix(problem_list)
         next_idx = idx + len(problem_list)
-        train[idx:next_idx] = matrix
+        out[idx:next_idx] = matrix
         is_bench[idx:next_idx] = is_benchmark
         next_idx = idx
-    return test, is_bench
+    return out, is_bench
 
 def convert_and_upsample(grade_dict):
     """
@@ -144,3 +140,14 @@ benchmarks, non_benchmarks = parse_raw(raw, filter={'6B', '8A+', '8B', '8B+'})
 train, test = split(benchmarks, non_benchmarks, SPLIT_RATIO)
 train, train_is_bench = convert_and_upsample(train)
 test, test_is_bench = convert(test)
+
+train = train.reshape((train.shape[0], -1))
+test = test.reshape((test.shape[0], -1))
+print(train.shape)
+print(test.shape)
+
+with open('./data/train.pkl', 'wb') as f:
+    pickle.dump((train, train_is_bench), f)
+
+with open('./data/test.pkl', 'wb') as f:
+    pickle.dump((test, test_is_bench), f)
