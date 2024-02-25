@@ -10,11 +10,6 @@ import random
 import math
 from plotting import plot_board_2016
 
-"""
-TODO:
-- Investigate if I need to change upsampling to use repeat instead
-"""
-
 with open("./data/problems MoonBoard 2016 .json") as f:
     raw = json.load(f)
 
@@ -135,19 +130,20 @@ def convert_and_upsample(grade_dict):
         is_bench[i * n_majority:((i+1) * n_majority)] = is_benchmark
     return train, is_bench
 
-# Filter anything higher than 8A, too few problems to sample
-benchmarks, non_benchmarks = parse_raw(raw, filter={'6B', '8A+', '8B', '8B+'})
-train, test = split(benchmarks, non_benchmarks, SPLIT_RATIO)
-train, train_is_bench = convert_and_upsample(train)
-test, test_is_bench = convert(test)
+if __name__ == "__main__":
+    # Filter anything higher than 8A, too few problems to sample
+    benchmarks, non_benchmarks = parse_raw(raw, filter={'6B', '8A+', '8B', '8B+'})
+    train, test = split(benchmarks, non_benchmarks, SPLIT_RATIO)
+    train, train_is_bench = convert_and_upsample(train)
+    test, test_is_bench = convert(test)
 
-train = train.reshape((train.shape[0], -1))
-test = test.reshape((test.shape[0], -1))
-print(train.shape)
-print(test.shape)
+    train = train.reshape((train.shape[0], -1))
+    test = test.reshape((test.shape[0], -1))
+    print(train.shape)
+    print(test.shape)
 
-with open('./data/train.pkl', 'wb') as f:
-    pickle.dump((train, train_is_bench), f)
+    with open('./data/train.pkl', 'wb') as f:
+        pickle.dump((train, train_is_bench), f)
 
-with open('./data/test.pkl', 'wb') as f:
-    pickle.dump((test, test_is_bench), f)
+    with open('./data/test.pkl', 'wb') as f:
+        pickle.dump((test, test_is_bench), f)
