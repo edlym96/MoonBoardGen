@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
+from matplotlib.widgets import Slider
 import os
 import numpy as np
 

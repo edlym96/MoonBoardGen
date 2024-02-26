@@ -10,15 +10,13 @@ import random
 import math
 from plotting import plot_board_2016
 
-with open("./data/problems MoonBoard 2016 .json") as f:
-    raw = json.load(f)
-
-total = raw['total']
 
 MOONBOARD_ROWS = 18
 MOONBOARD_COLS = 11
 SPLIT_RATIO = 0.8
 N_GRADES = 14
+TRAIN_PATH = './data/train_v2.pkl'
+TEST_PATH = './data/test_v2.pkl'
 
 GRADE_MAP = {
     '6A+': 0,
@@ -87,15 +85,29 @@ def _merge(benchmarks, non_benchmarks):
         out[grade] += non_benchmarks[grade]
     return out
 
-def split(benchmarks, non_benchmarks, split_ratio = 0.8):
+def filter_climbs(problem_dict):
     """
-    Splits the benchmarks and non_benchmarks into train and test dictionaries keyed on grade based on split_ratio
+    Helper funciton to filter erroneous climbs from a ditionary of grades to problem list
     """
-    train_bench, test_bench = _split(benchmarks, split_ratio)
-    train_nonbench, test_nonbench = _split(non_benchmarks, split_ratio)
-    train = _merge(train_bench, train_nonbench)
-    test = _merge(test_bench, test_nonbench)
-    return train, test
+    out = defaultdict(list)
+    for grade, problem_list in problem_dict.items():
+        out_list = []
+        for problem in problem_list:
+            moves = {'start':0,'move':0,'end':0}
+            for move in problem['moves']:
+                if move['isStart']:
+                    moves['start'] += 1
+                elif move['isEnd']:
+                    moves['end'] += 1
+                else:
+                    moves['move'] += 1
+            # Remove climbs that don't meet start and end move requirements, or problems wiht more than 10 moves
+            if moves['start'] > 2 or moves['start'] <= 0 or moves['end'] > 2 or moves['end'] <= 0 or moves['move'] < 2 or moves['move'] > 10:
+                continue
+            out_list.append(problem)
+        out[grade] = out_list
+    return out
+
 
 def convert_to_matrix(problem_list):
     """
@@ -108,6 +120,7 @@ def convert_to_matrix(problem_list):
         for move in problem['moves']:
             matrix_y, matrix_x = board_to_matrix_coord(move['description'])
             assert not (move['isStart'] and move['isEnd']), f"Not possible for hold {move['description']} to be both start and end"
+            # map the start/end/move holds to the correct z axis
             if move['isStart']:
                 matrix_z = 0
             elif move['isEnd']:
@@ -115,6 +128,7 @@ def convert_to_matrix(problem_list):
             else:
                 matrix_z = 1
             matrix[idx, matrix_z, matrix_y, matrix_x] = 1
+        # Build is benchmark output array
         if problem['isBenchmark']:
             is_benchmark[idx] = 1
     return matrix, is_benchmark
@@ -126,7 +140,7 @@ def convert(grade_dict):
     n_total = sum([len(problems) for problems in grade_dict.values()])
     out = np.zeros((n_total, 3, MOONBOARD_ROWS, MOONBOARD_COLS), dtype=np.int8)
     is_bench = np.zeros(n_total, dtype=np.int8)
-    grades = np.zeros(n_total, dtype=np.int8)
+    grades = np.zeros(n_total, dtype=int)
     idx = 0
     for grade, problem_list in grade_dict.items():
         matrix, is_benchmark = convert_to_matrix(problem_list)
@@ -153,37 +167,64 @@ def convert_and_upsample(grade_dict):
     return train, is_bench
 
 def upsample_benchmarks(benchmarks, non_benchmarks, benchmark_to_non_ratio=0.1):
+    """
+    Upsample benchmarks to benchmark_to_non_ratio of non benchmarks
+    """
     for grade, benchmark_list in benchmarks.items():
         factor = (benchmark_to_non_ratio * len(non_benchmarks[grade])) // len(benchmark_list)
         if factor > 0:
             benchmarks[grade] *= int(factor)
 
-def upsample_grades(grade_dict, majority_ratio=0.08):
+def upsample_grades(grade_dict):
+    """
+    Upsample minority grades to be majority_ratio of the majority grade
+    """
     majority_length = max(len(grade_list) for grade_list in grade_dict.values())
     for grade, grade_list in grade_dict.items():
-        factor = (majority_ratio * majority_length) // len(grade_list)
-        if factor > 0:
-            grade_dict[grade] *= int(factor)
+        factor = majority_length // len(grade_list)
+        # If class is < 10% minority, onyl upsample by 5
+        if factor > 10:
+            grade_dict[grade] *= 5
+        elif factor > 1:
+            # Min with 3 to not over represent certain classes
+            grade_dict[grade] *= min(3, int(factor))
+
 
 if __name__ == "__main__":
+    with open("./data/problems MoonBoard 2016 .json") as f:
+        raw = json.load(f)
+
+    total = raw['total']
+    # Split benchmarks and non benchamrks befor train/test split because we handle non-benchmarks differently
     # Filter anything higher than 8A, too few problems to sample
     benchmarks, non_benchmarks = parse_raw(raw, filter={'6B', '8A+', '8B', '8B+'})
+    # Filter climbs with too many/little holds
+    non_benchmarks = filter_climbs(non_benchmarks)
+    # Split the benchmarks and non-benchmarks to train and test sets
     train_bench, test_bench = _split(benchmarks, SPLIT_RATIO)
     train_non_bench, test_non_bench = _split(non_benchmarks, SPLIT_RATIO)
-    # train, test = split(benchmarks, non_benchmarks, SPLIT_RATIO)
+    # Upsample benchmarks for the train dataset. Don't need to do this for test
     upsample_benchmarks(train_bench, train_non_bench)
     train = _merge(train_bench, train_non_bench)
+    # Upsample grades of the train dataset to be more balanced
     upsample_grades(train)
+    
     test = _merge(test_bench, test_non_bench)
+    # Convert the raw jsons into numpy arrays
     train, train_is_bench, train_grades = convert(train)
     test, test_is_bench, test_grades = convert(test)
 
+    # Rehshape to flatten the board
     train = train.reshape((train.shape[0], -1))
     test = test.reshape((test.shape[0], -1))
+
     print(train.shape)
     print(test.shape)
-    # with open('./data/train.pkl', 'wb') as f:
-    #     pickle.dump((train, train_is_bench, train_grades), f)
 
-    # with open('./data/test.pkl', 'wb') as f:
-    #     pickle.dump((test, test_is_bench, test_grades), f)
+    with open(TRAIN_PATH, 'wb') as f:
+        print(f"Writing train data to {TRAIN_PATH}")
+        pickle.dump((train, train_is_bench, train_grades), f)
+
+    with open(TEST_PATH, 'wb') as f:
+        print(f"Writing test data to {TEST_PATH}")
+        pickle.dump((test, test_is_bench, test_grades), f)
