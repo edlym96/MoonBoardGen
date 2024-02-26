@@ -18,6 +18,24 @@ total = raw['total']
 MOONBOARD_ROWS = 18
 MOONBOARD_COLS = 11
 SPLIT_RATIO = 0.8
+N_GRADES = 14
+
+GRADE_MAP = {
+    '6A+': 0,
+    '6B': 1,
+    '6B+': 2,
+    '6C': 3,
+    '6C+': 4,
+    '7A': 5,
+    '7A+': 6,
+    '7B': 7,
+    '7B+': 8,
+    '7C': 9,
+    '7C+': 10,
+    '8A': 11,
+    '8A+': 12,
+    '8B': 13,
+}
 
 def parse_raw(raw, filter=set()):
     # first dim is (start, normal holds, end)
@@ -62,19 +80,21 @@ def _split(problem_dict, split_ratio=0.8):
     
     return train, test
 
+def _merge(benchmarks, non_benchmarks):
+    out = defaultdict(list)
+    for grade in benchmarks:
+        out[grade] += benchmarks[grade]
+        out[grade] += non_benchmarks[grade]
+    return out
+
 def split(benchmarks, non_benchmarks, split_ratio = 0.8):
     """
     Splits the benchmarks and non_benchmarks into train and test dictionaries keyed on grade based on split_ratio
     """
-    train = defaultdict(list)
-    test = defaultdict(list)
     train_bench, test_bench = _split(benchmarks, split_ratio)
     train_nonbench, test_nonbench = _split(non_benchmarks, split_ratio)
-    for grade in train_bench:
-        train[grade] += train_bench[grade]
-        train[grade] += train_nonbench[grade]
-        test[grade] += test_bench[grade]
-        test[grade] += test_nonbench[grade]
+    train = _merge(train_bench, train_nonbench)
+    test = _merge(test_bench, test_nonbench)
     return train, test
 
 def convert_to_matrix(problem_list):
@@ -106,14 +126,16 @@ def convert(grade_dict):
     n_total = sum([len(problems) for problems in grade_dict.values()])
     out = np.zeros((n_total, 3, MOONBOARD_ROWS, MOONBOARD_COLS), dtype=np.int8)
     is_bench = np.zeros(n_total, dtype=np.int8)
+    grades = np.zeros(n_total, dtype=np.int8)
     idx = 0
-    for problem_list in grade_dict.values():
+    for grade, problem_list in grade_dict.items():
         matrix, is_benchmark = convert_to_matrix(problem_list)
         next_idx = idx + len(problem_list)
         out[idx:next_idx] = matrix
         is_bench[idx:next_idx] = is_benchmark
-        next_idx = idx
-    return out, is_bench
+        grades[idx:next_idx] = GRADE_MAP[grade]
+        idx = next_idx
+    return out, is_bench, grades
 
 def convert_and_upsample(grade_dict):
     """
@@ -130,20 +152,38 @@ def convert_and_upsample(grade_dict):
         is_bench[i * n_majority:((i+1) * n_majority)] = is_benchmark
     return train, is_bench
 
+def upsample_benchmarks(benchmarks, non_benchmarks, benchmark_to_non_ratio=0.1):
+    for grade, benchmark_list in benchmarks.items():
+        factor = (benchmark_to_non_ratio * len(non_benchmarks[grade])) // len(benchmark_list)
+        if factor > 0:
+            benchmarks[grade] *= int(factor)
+
+def upsample_grades(grade_dict, majority_ratio=0.08):
+    majority_length = max(len(grade_list) for grade_list in grade_dict.values())
+    for grade, grade_list in grade_dict.items():
+        factor = (majority_ratio * majority_length) // len(grade_list)
+        if factor > 0:
+            grade_dict[grade] *= int(factor)
+
 if __name__ == "__main__":
     # Filter anything higher than 8A, too few problems to sample
     benchmarks, non_benchmarks = parse_raw(raw, filter={'6B', '8A+', '8B', '8B+'})
-    train, test = split(benchmarks, non_benchmarks, SPLIT_RATIO)
-    train, train_is_bench = convert_and_upsample(train)
-    test, test_is_bench = convert(test)
+    train_bench, test_bench = _split(benchmarks, SPLIT_RATIO)
+    train_non_bench, test_non_bench = _split(non_benchmarks, SPLIT_RATIO)
+    # train, test = split(benchmarks, non_benchmarks, SPLIT_RATIO)
+    upsample_benchmarks(train_bench, train_non_bench)
+    train = _merge(train_bench, train_non_bench)
+    upsample_grades(train)
+    test = _merge(test_bench, test_non_bench)
+    train, train_is_bench, train_grades = convert(train)
+    test, test_is_bench, test_grades = convert(test)
 
     train = train.reshape((train.shape[0], -1))
     test = test.reshape((test.shape[0], -1))
     print(train.shape)
     print(test.shape)
+    # with open('./data/train.pkl', 'wb') as f:
+    #     pickle.dump((train, train_is_bench, train_grades), f)
 
-    with open('./data/train.pkl', 'wb') as f:
-        pickle.dump((train, train_is_bench), f)
-
-    with open('./data/test.pkl', 'wb') as f:
-        pickle.dump((test, test_is_bench), f)
+    # with open('./data/test.pkl', 'wb') as f:
+    #     pickle.dump((test, test_is_bench, test_grades), f)

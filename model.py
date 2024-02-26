@@ -9,9 +9,8 @@ PATH = "./new_moonboard2016_vae_64_hold_err_v2.model"
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 """
 TODO:
- - Change sampling methodology, clean the data better
+ - clean the data
  - Add conditional VAE with grades
- - Rewrite data loader to allow for grades
  - clean up code
 """
 
@@ -174,10 +173,11 @@ def loss_function(recon_x, x, mu, logvar, weights):
     # return BCE + 0.05 * KLD + 2 * START_HOLD_ERR + END_HOLD_ERR + MOVE_HOLD_ERR
 
 
-def train_vae(X_train, X_weights, learning_rate=3e-4, num_epochs=100, batch_size=64, model_path=None):
+def train_vae(X_train, X_weights, X_grades, learning_rate=3e-4, num_epochs=100, batch_size=64, model_path=None):
     # Convert the training data to PyTorch tensors
     X_train = torch.from_numpy(X_train).to(device)
     X_weights = torch.from_numpy(X_weights).to(device)
+    X_grades = torch.from_numpy(X_grades).to(device)
     
     # Create the autoencoder model and optimizer
     model = MoonBoardVAE()
@@ -194,7 +194,7 @@ def train_vae(X_train, X_weights, learning_rate=3e-4, num_epochs=100, batch_size
     model.to(device)
 
     # Create a DataLoader to handle batching of the training data
-    train_dataset = MoonBoardWeightedDataset(X_train, X_weights)
+    train_dataset = MoonBoardWeightedDataset(X_train, X_weights, X_grades)
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True
     )
@@ -203,7 +203,7 @@ def train_vae(X_train, X_weights, learning_rate=3e-4, num_epochs=100, batch_size
     # Training loop
     for epoch in range(num_epochs):
         total_loss = 0.0
-        for batch_idx, (data, weights) in enumerate(train_loader):
+        for batch_idx, (data, weights, grade_one_hot) in enumerate(train_loader):
             # Get a batch of training data and move it to the device
             data = data.to(device)
             weights = weights.to(device)
@@ -236,10 +236,10 @@ def train_vae(X_train, X_weights, learning_rate=3e-4, num_epochs=100, batch_size
 
 if __name__ == "__main__":
     with open('./data/train.pkl', 'rb') as f:
-        train, train_is_bench = pickle.load(f)
+        train, train_is_bench, train_grades = pickle.load(f)
     train = train.astype('float32')
 
     with open('./data/test.pkl', 'rb') as f:
-        test, test_is_bench = pickle.load(f)
+        test, test_is_bench, test_grades = pickle.load(f)
 
     train_vae(train, train_is_bench)
