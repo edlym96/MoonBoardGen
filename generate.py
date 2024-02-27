@@ -1,68 +1,60 @@
-from dataset import MoonBoardWeightedDataset
-from model import PATH, MoonBoardVAE, MoonBoardCVAE, loss_function
-from parse_problems import TEST_PATH, TRAIN_PATH
-from plotting import plot_board_2016
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Button, RadioButtons
+from model import MODEL_PATH, MoonBoardCVAE
+from constants import GRADE_MAP
+from plotting import MOONBOARD_IMG, plot_board_helper
 import torch
-import pickle
 
+def generate_board(model, grade):
+    # translate grade to index
+    grade_idx = GRADE_MAP[grade]
+    # Sample a board from the model, reshape and convert to numpy array
+    generated_board = model.sample(1, grade_idx).reshape(3, 18, 11).numpy()
+    return generated_board
 
-model_paths = [
-    './new_moonboard2016_cvae_64.model',
-    './new_moonboard2016_cvae_64_no_hold_err.model',
-    './new_moonboard2016_cvae_64_move_hold_err.model',
-    './new_moonboard2016_cvae_64_hold_zero_err.model',
-    './new_moonboard2016_cvae_64_kll_anneal.model',
-    "./new_moonboard2016_cvae_64_data_v2.model"
-]
+def generate_and_plot(model):
+    # Global state grade for updating plots, init to 6B+
+    global_grade = '6B+'
+    img = plt.imread(MOONBOARD_IMG)
 
-with open(TRAIN_PATH, 'rb') as f:
-    train, train_is_bench, train_grades = pickle.load(f)
-    train = train.astype('float32')
+    # Create a figure. Equal aspect so circles look circular
+    fig, ax = plt.subplots(1, figsize=(10,9))
+    ax.set_aspect('equal')
+    axwave = fig.add_axes([0.25, 0.05, 0.5, 0.02])
+    # "global" variable to hold slider reference
+    slider = None
+    
+    def new_board(event):
+        nonlocal slider
+        print(f"Generating board with grade {global_grade}")
+        generated_board = generate_board(model, global_grade)
+        # Clear axis states
+        ax.cla()
+        axwave.cla()
+        # Keep reference to slider object
+        slider = plot_board_helper(generated_board, fig, ax, axwave, img)
 
-train = train.astype('float32')
-train = torch.from_numpy(train)
-train_weights = torch.from_numpy(train_is_bench)
-train_grades = torch.from_numpy(train_grades)
-train_dataset = MoonBoardWeightedDataset(train, train_weights, train_grades)
+    # Init board plot
+    new_board(global_grade)
 
-with open(TEST_PATH, 'rb') as f:
-    test, test_is_bench, test_grades = pickle.load(f)
+    # Set grade callback function for radio buttons
+    def set_grade(grade):
+        nonlocal global_grade
+        global_grade = grade
 
-test = test.astype('float32')
-test = torch.from_numpy(test)
-test_weights = torch.from_numpy(test_is_bench)
-test_grades = torch.from_numpy(test_grades)
-test_dataset = MoonBoardWeightedDataset(test, test_weights, test_grades)
+    # radio buttons
+    rax = plt.axes([0.12, 0.15, 0.1, 0.2])
+    radio_button = RadioButtons(rax, list(GRADE_MAP.keys()), active=GRADE_MAP[global_grade], activecolor='black')
+    radio_button.on_clicked(set_grade)
 
-# model = MoonBoardVAE()
-for path in model_paths:
-    model = MoonBoardCVAE()
-    model.load_state_dict(torch.load(path))
-    model.eval()
+    # Generate button
+    button_axes = fig.add_axes([0.66, 0.000001, 0.08, 0.04])
+    bnext = Button(button_axes, 'Generate',color="yellow")
+    bnext.on_clicked(new_board)
+    plt.show()
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=64, shuffle=True
-    )
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset, batch_size=64, shuffle=False
-    )
-    for (data, weights, grade_one_hot) in train_loader:
-        encoded, decoded, mu, log_var = model(data, grade_one_hot)
-
-        # Compute the loss and perform backpropagation
-        loss = loss_function(decoded, data, mu, log_var, weights)
-        train_loss = loss.item()
-    train_loss /= len(train_loader.dataset)
-
-    for (data, weights, grade_one_hot) in test_loader:
-        encoded, decoded, mu, log_var = model(data, grade_one_hot)
-
-        # Compute the loss and perform backpropagation
-        loss = loss_function(decoded, data, mu, log_var, weights)
-        test_loss = loss.item()
-    test_loss /= len(test_loader.dataset)
-
-    print(f"[{path}]\nTrain loss: {train_loss}\nTest loss {test_loss}\n")
-
-generated_board = model.sample(1, 2).reshape(3, 18, 11).numpy()
-import pdb;pdb.set_trace()
+if __name__ == "__main__":
+    model_obj = MoonBoardCVAE()
+    model_obj.load_state_dict(torch.load(MODEL_PATH))
+    model_obj.eval()
+    generate_and_plot(model_obj)

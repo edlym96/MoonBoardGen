@@ -1,39 +1,15 @@
 from collections import defaultdict
-import matplotlib.pyplot as plt
-from matplotlib.patches import Circle
-from sklearn.utils import resample
-import os
 import numpy as np
 import json
 import pickle
 import random
 import math
+from constants import GRADE_MAP, MOONBOARD_COLS, MOONBOARD_ROWS, TEST_PATH, TRAIN_PATH
 from plotting import plot_board_2016
 
-
-MOONBOARD_ROWS = 18
-MOONBOARD_COLS = 11
+# Train-Test dataset split
 SPLIT_RATIO = 0.8
-N_GRADES = 14
-TRAIN_PATH = './data/train_v2.pkl'
-TEST_PATH = './data/test_v2.pkl'
 
-GRADE_MAP = {
-    '6A+': 0,
-    '6B': 1,
-    '6B+': 2,
-    '6C': 3,
-    '6C+': 4,
-    '7A': 5,
-    '7A+': 6,
-    '7B': 7,
-    '7B+': 8,
-    '7C': 9,
-    '7C+': 10,
-    '8A': 11,
-    '8A+': 12,
-    '8B': 13,
-}
 
 def parse_raw(raw, filter=set()):
     # first dim is (start, normal holds, end)
@@ -64,7 +40,7 @@ def board_to_matrix_coord(board_coord:str) -> tuple[int, int]:
 
     return (matrix_y, matrix_x)
 
-def _split(problem_dict, split_ratio=0.8):
+def _split(problem_dict, split_ratio=SPLIT_RATIO):
     """
     Helper function for splitting a grade dict into train and test data based on split_ratio
     """

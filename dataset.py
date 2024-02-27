@@ -1,5 +1,5 @@
 import torch
-from parse_problems import N_GRADES
+from constants import N_GRADES
 
 class MoonBoardWeightedDataset(torch.utils.data.Dataset):
     def __init__(self, board_tensor, is_bench_tensor, grade_tensor, benchmark_weight=10):
