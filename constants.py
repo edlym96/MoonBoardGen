@@ -17,5 +17,6 @@ GRADE_MAP = {
     '8A+': 12,
     '8B': 13,
 }
+GRADE_MAP_REV = {val:k for k, val in GRADE_MAP.items()}
 TRAIN_PATH = './data/train_v2.pkl'
 TEST_PATH = './data/test_v2.pkl'
