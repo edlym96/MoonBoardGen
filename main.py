@@ -11,13 +11,9 @@ import asyncio
 # Import pygame.locals for easier access to key coordinates
 # Updated to conform to flake8 and black standards
 from pygame.locals import (
-    RLEACCEL,
-    K_UP,
-    K_DOWN,
-    K_LEFT,
-    K_RIGHT,
     K_ESCAPE,
     KEYDOWN,
+    K_SPACE,
     QUIT,
 )
 from constants import GRADE_MAP_REV, N_GRADES
@@ -172,16 +168,15 @@ opt_font = pygame.font.SysFont(None, size=24)
 hold_text = opt_font.render("Hold", True, pygame.Color(0, 0, 0))
 grade_text = opt_font.render("Grade", True, pygame.Color(0, 0, 0))
 
-def button_press():
+def new_board():
     board.generate_new_board()
     slider.setValue(0.2)
 
 button = Button(screen, 80, SCREEN_HEIGHT - 60, 380, 40, text="Generate", fontSize=24, pressedColour=(239,223,83))
-button.setOnRelease(button_press)
+button.setOnRelease(new_board)
 
 async def main():
     global running, board, slider, slider_text, grade_slider, grade_slider_text, hold_text, grade_text, button
-    # global running, board, hold_text, grade_text
     # Main loop
     while running:
         events = pygame.event.get()
@@ -192,10 +187,12 @@ async def main():
                 # Was it the Escape key? If so, stop the loop.
                 if event.key == K_ESCAPE:
                     running = False
-
+                elif event.key == K_SPACE:
+                    new_board()
             # Did the user click the window close button? If so, stop the loop.
             elif event.type == QUIT:
                 running = False
+            
         
         # Fill screen with white
         screen.fill((255, 255, 255))
