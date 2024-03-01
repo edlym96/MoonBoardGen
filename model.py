@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from constants import MOONBOARD_COLS, MOONBOARD_ROWS, N_GRADES
+from constants import GRADE_MAP, MOONBOARD_COLS, MOONBOARD_ROWS, N_GRADES
 
 MODEL_PATH = "./new_moonboard2016_cvae_64_data_v2.model"
 
@@ -159,3 +159,10 @@ def loss_function(recon_x, x, mu, logvar, weights):
     
     # Combine the losses by adding them together and return the result
     return BCE + 0.1 * KLD + START_HOLD_ERR + END_HOLD_ERR
+
+def generate_board(model, grade):
+    # translate grade to index
+    grade_idx = GRADE_MAP[grade]
+    # Sample a board from the model, reshape and convert to numpy array
+    generated_board = model.sample(1, grade_idx).reshape(3, 18, 11).numpy()
+    return generated_board

@@ -1,16 +1,9 @@
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, RadioButtons
-from model import MODEL_PATH, MoonBoardCVAE
+from model import MODEL_PATH, MoonBoardCVAE, generate_board
 from constants import GRADE_MAP
 from plotting import MOONBOARD_IMG, plot_board_helper
 import torch
-
-def generate_board(model, grade):
-    # translate grade to index
-    grade_idx = GRADE_MAP[grade]
-    # Sample a board from the model, reshape and convert to numpy array
-    generated_board = model.sample(1, grade_idx).reshape(3, 18, 11).numpy()
-    return generated_board
 
 def generate_and_plot(model):
     # Global state grade for updating plots, init to 6B+
